@@ -26,7 +26,8 @@
             },
             recordId = settings.recordId || "id",
             authenticator = settings.authenticator || null,
-            type = "Rest";
+            type = "Rest",
+            name = pipeName;
 
         // Privileged Methods
         /**
@@ -79,6 +80,16 @@
          */
         this.getRecordId = function() {
             return recordId;
+        };
+
+        /**
+            Returns the value of the private name var
+            @private
+            @augments Rest
+            @returns {String}
+         */
+        this.getName = function() {
+            return name;
         };
     };
 
@@ -158,8 +169,8 @@
         };
         extraOptions = {
             type: "GET",
-            success: success,
-            error: error,
+            success: options.success,
+            error: options.error,
             url: url,
             statusCode: options.statusCode,
             complete: options.complete
@@ -174,9 +185,9 @@
         @param {Object} [options={}] - Additional options
         @param {Function} [options.complete] - a callback to be called when the result of the request to the server is complete, regardless of success
         @param {Function} [options.error] - a callback to be called when the request to the server results in an error
+        @param {Object} [options.noSync] - If true, do not trigger the sync event (usually used internally during a sync to avoid loops)
         @param {Object} [options.statusCode] - a collection of status codes and callbacks to fire when the request to the server returns on of those codes. For more info see the statusCode option on the <a href="http://api.jquery.com/jQuery.ajax/">jQuery.ajax page</a>.
         @param {Function} [options.success] - a callback to be called when the result of the request to the server is successful
-        @param {Object|Array} [options.stores] - A single store object or array of stores to be updated when a server update is successful
         @returns {Object} A deferred implementing the promise interface similar to the jqXHR created by jQuery.ajax
         @example
         var myPipe = AeroGear.pipeline( "tasks" ).pipes[ 0 ];
@@ -212,6 +223,7 @@
         var that = this,
             recordId = this.getRecordId(),
             ajaxSettings = this.getAjaxSettings(),
+            name = this.getName(),
             type,
             url,
             success,
@@ -229,13 +241,8 @@
         }
 
         success = function( data ) {
-            var stores = AeroGear.isArray( options.stores ) ? options.stores : [ options.stores ],
-                item;
-
-            if ( options.stores ) {
-                for ( item in stores ) {
-                    stores[ item ].save( data );
-                }
+            if ( !options.noSync ) {
+                $( document ).trigger( $.Event( "ag-sync-" + name + "-pipe-save" ) );
             }
 
             if ( options.success ) {

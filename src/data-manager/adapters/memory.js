@@ -19,6 +19,7 @@
         // Private Instance vars
         var recordId = settings.recordId ? settings.recordId : "id",
             type = "Memory",
+            name = storeName,
             data = null,
             dataSync = !!settings.dataSync;
 
@@ -34,18 +35,28 @@
         };
 
         /**
+            Returns the value of the private name var
+            @private
+            @augments Memory
+            @returns {String}
+         */
+        this.getName = function() {
+            return name;
+        };
+
+        /**
             Returns the value of the private data var, filtered by sync status if necessary
             @private
             @augments Memory
-            @param {Boolean} [dataSyncBypass] - get all data no matter it's sync status
+            @param {Boolean} [noSync] - get all data no matter it's sync status
             @returns {Array}
          */
-        this.getData = function( dataSyncBypass ) {
+        this.getData = function( noSync ) {
             var activeData = [],
                 item,
                 syncStatus;
 
-            if ( dataSync && !dataSyncBypass ) {
+            if ( dataSync && !noSync ) {
                 for ( item in data ) {
                     syncStatus = data[ item ][ "ag-sync-status" ];
                     if ( syncStatus !== AeroGear.DataManager.STATUS_REMOVED ) {
@@ -63,13 +74,49 @@
             @private
             @augments Memory
          */
-        this.setData = function( newData ) {
-            if ( dataSync ) {
-                for ( var item in newData ) {
-                    newData[ item ][ "ag-sync-status" ] = AeroGear.DataManager.STATUS_NEW;
+        this.setData = function( newData, reset ) {
+            var curData = data || [],
+                curItem,
+                newItem,
+                found;
+
+            if ( !dataSync && reset ) {
+                data = newData;
+                return;
+            }
+
+            if ( curData.length ) {
+                for ( curItem in curData ) {
+                    found = false;
+                    for ( newItem in newData ) {
+                        if ( newData[ newItem ][ recordId ] == curData[ curItem ][ recordId ] ) {
+                            if ( dataSync ) {
+                                newData[ newItem ][ "ag-sync-status" ] = AeroGear.DataManager.STATUS_MODIFIED;
+                            }
+                            curData[ curItem ] = newData[ newItem ];
+                            newData.splice( newItem, 1 );
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if ( !found && reset ) {
+                        if ( dataSync ) {
+                            curData[ curItem ][ "ag-sync-status" ] = AeroGear.DataManager.STATUS_REMOVED;
+                        } else {
+                            curData.splice( curItem, 1 );
+                        }
+                    }
                 }
             }
-            data = newData;
+
+            if ( newData.length ) {
+                for ( newItem in newData ) {
+                    newData[ newItem ][ "ag-sync-status" ] = AeroGear.DataManager.STATUS_NEW;
+                    curData.push( newData[ newItem ] );
+                }
+            }
+            data = curData;
         };
 
         /**
@@ -152,16 +199,19 @@
     /**
         Saves data to the store, optionally clearing and resetting the data
         @param {Object|Array} data - An object or array of objects representing the data to be saved to the server. When doing an update, one of the key/value pairs in the object to update must be the `recordId` you set during creation of the store representing the unique identifier for a "record" in the data set.
-        @param {Boolean} [reset] - If true, this will empty the current data and set it to the data being saved
+        @param {Object} [options] - Extra options to pass to save
+        @param {Object} [options.noSync] - If true, do not sync this save to the server (usually used internally during a sync to avoid loops)
+        @param {Boolean} [options.reset] - If true, this will empty the current data and set it to the data being saved
         @returns {Array} Returns the updated data from the store
      */
-    AeroGear.DataManager.adapters.Memory.prototype.save = function( data, reset ) {
+    AeroGear.DataManager.adapters.Memory.prototype.save = function( data, options ) {
         var itemFound = false;
 
         data = AeroGear.isArray( data ) ? data : [ data ];
+        options = options || {};
 
-        if ( reset ) {
-            this.setData( data );
+        if ( options.reset ) {
+            this.setData( data, true );
         } else {
             if ( this.getData() ) {
                 for ( var i = 0; i < data.length; i++ ) {
@@ -181,6 +231,11 @@
             } else {
                 this.setData( data );
             }
+        }
+
+        if ( this.getDataSync() && !options.noSync ) {
+            // Trigger custom save event
+            $( document ).trigger( $.Event( "ag-sync-" + this.getName() + "-store-save", { syncData: this.getData() } ) );
         }
 
         return this.getData();

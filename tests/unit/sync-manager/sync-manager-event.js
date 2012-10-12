@@ -3,128 +3,23 @@
 // Do not reorder tests on rerun
 QUnit.config.reorder = false;
 
-module( "DataManager: Memory" );
+module( "SyncManager: Event Based Syncing" );
 
-test( "create - name string", function() {
-    expect( 2 );
-
-    var dm = AeroGear.DataManager( "createTest1" ).stores;
-    equal( Object.keys( dm ).length, 1, "Single Store created" );
-    equal( Object.keys( dm )[ 0 ], "createTest1", "Store Name createTest1" );
-});
-
-test( "create - name array", function() {
-    expect( 4 );
-
-    var dm = AeroGear.DataManager([
-        "createTest21",
-        {
-            name: "createTest22",
-            type: "Memory"
-        },
-        "createTest23"
-    ]).stores;
-
-    equal( Object.keys( dm ).length, 3, "3 Stores created" );
-    equal( Object.keys( dm )[ 0 ], "createTest21", "Store Name createTest21" );
-    equal( Object.keys( dm )[ 1 ], "createTest22", "Store Name createTest22" );
-    equal( Object.keys( dm )[ 2 ], "createTest23", "Store Name createTest23" );
-});
-
-test( "create - object", function() {
-    expect( 3 );
-
-    var dm = AeroGear.DataManager([
-        {
-            name: "createTest31"
-        },
-        {
-            name: "createTest32",
-            type: "Memory"
+// Create a memory store that tracs data status to store data for some tests
+var userPipe = AeroGear.Pipeline( "users" ).pipes.users,
+    userStore = AeroGear.DataManager({
+        name: "users",
+        settings: {
+            dataSync: true
         }
-    ]).stores;
-
-    equal( Object.keys( dm ).length, 2, "2 Stores created" );
-    equal( Object.keys( dm )[ 0 ], "createTest31", "Store Name createTest31" );
-    equal( Object.keys( dm )[ 1 ], "createTest32", "Store Name createTest32" );
-});
-
-test( "add and remove - string ", function() {
-    expect( 5 );
-
-    var dm = AeroGear.DataManager();
-    dm.add( "addTest1" ),
-    dm.add( "addTest2" );
-
-    equal( Object.keys( dm.stores ).length, 2, "2 Stores added" );
-    equal( Object.keys( dm.stores )[ 0 ], "addTest1", "Store Name addTest1" );
-    equal( Object.keys( dm.stores )[ 1 ], "addTest2", "Store Name addTest2" );
-
-    dm.remove( "addTest1" );
-    equal( Object.keys( dm.stores ).length, 1, "1 Stores removed" );
-    equal( dm.stores.addTest1, undefined, "Store Name addTest1 no longer exists" );
-
-
-});
-
-test( "add and remove - array ", function() {
-    expect( 7 );
-
-    var dm = AeroGear.DataManager();
-    dm.add([
-        "addTest3",
-        {
-            name: "addTest4"
-        },
-        "addTest5"
-    ]);
-
-    equal( Object.keys( dm.stores ).length, 3, "3 Stores added" );
-    equal( Object.keys( dm.stores )[ 0 ], "addTest3", "Store Name addTest3" );
-    equal( Object.keys( dm.stores )[ 1 ], "addTest4", "Store Name addTest4" );
-    equal( Object.keys( dm.stores )[ 2 ], "addTest5", "Store Name addTest5" );
-
-    dm.remove( ["addTest5", "addTest4"] );
-    equal( Object.keys( dm.stores ).length, 1, "2 Stores removed" );
-    equal( dm.stores.addTest4, undefined, "Store Name addTest4 no longer exists" );
-    equal( dm.stores.addTest5, undefined, "Store Name addTest5 no longer exists" );
-
-
-});
-
-test( "add and remove - object ", function() {
-    expect( 7 );
-
-    var dm = AeroGear.DataManager();
-    dm.add([
-        {
-            name: "addTest6"
-        },
-        {
-            name: "addTest7"
+    }).stores.users,
+    userSync = AeroGear.SyncManager({
+        name: "users",
+        settings: {
+            pipe: userPipe,
+            store: userStore
         }
-    ]);
-
-    equal( Object.keys( dm.stores ).length, 2, "2 Stores added" );
-    equal( Object.keys( dm.stores )[ 0 ], "addTest6", "Store Name addTest6" );
-    equal( Object.keys( dm.stores )[ 1 ], "addTest7", "Store Name addTest7" );
-
-    dm.remove( { name: "addTest6" } );
-    equal( Object.keys( dm.stores ).length, 1, "1 Stores removed" );
-    equal( dm.stores.addTest6, undefined, "Store Name addTest6 no longer exists" );
-
-    dm.remove( [ { name: "addTest7" } ] );
-    equal( Object.keys( dm.stores ).length, 0, "1 Stores removed" );
-    equal( dm.stores.addTest7, undefined, "Store Name addTest7 no longer exists" );
-
-
-
-});
-
-module( "DataManager: Memory - Data Manipulation" );
-
-// Create a default (memory) dataManager to store data for some tests
-var userStore = AeroGear.DataManager( "users" ).stores.users;
+    });
 
 // Initialize the data set
 test( "save - initialize", function() {
@@ -182,7 +77,7 @@ test( "read", function() {
 
 // Save data
 test( "save single", function() {
-    expect( 2 );
+    expect( 3 );
 
     userStore.save({
         id: 12351,
@@ -192,9 +87,10 @@ test( "save single", function() {
     });
     equal( userStore.read().length, 7, "Read all data including new item" );
     equal( userStore.read( 12351 ).length, 1, "Read new item by id" );
+    equal( userStore.read( 12351 )[ 0 ][ "ag-sync-status" ], 1, "Read new item's sync status" );
 });
 test( "save multiple", function() {
-    expect( 2 );
+    expect( 4 );
 
     userStore.save([
         {
@@ -212,9 +108,11 @@ test( "save multiple", function() {
     ]);
     equal( userStore.read().length, 9, "Read all data including new items" );
     equal( userStore.read( 12353 ).length, 1, "Read new item by id" );
+    equal( userStore.read( 12352 )[ 0 ][ "ag-sync-status" ], 1, "Read new item's sync status" );
+    equal( userStore.read( 12353 )[ 0 ][ "ag-sync-status" ], 1, "Read new item's sync status" );
 });
 test( "update single", function() {
-    expect( 2 );
+    expect( 3 );
 
     userStore.save({
         id: 12351,
@@ -224,9 +122,10 @@ test( "update single", function() {
     });
     equal( userStore.read().length, 9, "Data length unchanged" );
     equal( userStore.read( 12351 )[ 0 ].fname, "Updated", "Check item is updated" );
+    equal( userStore.read( 12351 )[ 0 ][ "ag-sync-status" ], 2, "Read updated item's sync status" );
 });
 test( "update multiple", function() {
-    expect( 2 );
+    expect( 4 );
 
     userStore.save([
         {
@@ -244,9 +143,11 @@ test( "update multiple", function() {
     ]);
     equal( userStore.read().length, 9, "Data length unchanged" );
     equal( userStore.read( 12353 )[ 0 ].fname, "Updated", "Check item is updated" );
+    equal( userStore.read( 12352 )[ 0 ][ "ag-sync-status" ], 2, "Read updated item's sync status" );
+    equal( userStore.read( 12353 )[ 0 ][ "ag-sync-status" ], 2, "Read updated item's sync status" );
 });
 test( "update and add", function() {
-    expect( 3 );
+    expect( 5 );
 
     userStore.save([
         {
@@ -265,6 +166,8 @@ test( "update and add", function() {
     equal( userStore.read().length, 10, "One new item added" );
     equal( userStore.read( 12352 )[ 0 ].fname, "UpdatedAgain", "Check item is updated" );
     equal( userStore.read( 12354 ).length, 1, "Read new item by id" );
+    equal( userStore.read( 12352 )[ 0 ][ "ag-sync-status" ], 2, "Read updated item's sync status" );
+    equal( userStore.read( 12354 )[ 0 ][ "ag-sync-status" ], 1, "Read new item's sync status" );
 });
 
 // Remove data
@@ -291,7 +194,7 @@ test( "remove multiple - different formats", function() {
 test( "reset all data", function() {
     expect( 3 );
 
-    var newData = userStore.save([
+    userStore.save([
         {
             id: 12345,
             fname: "John",
@@ -329,8 +232,7 @@ test( "reset all data", function() {
             dept: "Marketing"
         }
     ], { reset: true } );
-
-    equal( newData.length, 6, "All data reset" );
+    equal( userStore.read().length, 6, "Read all data" );
     equal( userStore.read( 12345 ).length, 1, "Removed item has returned" );
     equal( userStore.read( 12351 ).length, 0, "Added item doesn't exist" );
 });
@@ -470,7 +372,7 @@ test( "reset all data", function() {
             project: 33,
             tags: [ 222 ]
         }
-    ], { reset: true } );
+    ], true );
 
     equal( tasksStore.read().length, 4, "4 Items Added" );
 });
